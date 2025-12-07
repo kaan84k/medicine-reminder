@@ -3,13 +3,20 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type Medicine = {
+  id: string;
   name: string;
   dose?: string;
   time: string;
   notes?: string;
+  status: "pending" | "taken";
 };
 
 const STORAGE_KEY = "medicine_reminders_v1";
+
+const makeId = () =>
+  typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
 
 const formatTime = (time: string) => {
   if (!time) return "";
@@ -32,10 +39,12 @@ const loadMedicines = (): Medicine[] => {
     return parsed
       .filter((item) => item && typeof item === "object")
       .map((item) => ({
+        id: typeof item.id === "string" ? item.id : makeId(),
         name: typeof item.name === "string" ? item.name : "",
         dose: typeof item.dose === "string" ? item.dose : undefined,
         time: typeof item.time === "string" ? item.time : "",
         notes: typeof item.notes === "string" ? item.notes : undefined,
+        status: item.status === "taken" ? "taken" : "pending",
       }))
       .filter((item) => item.name && item.time);
   } catch (error) {
@@ -60,6 +69,8 @@ export default function Home() {
   // Load medicines from localStorage after mount (client-only).
   useEffect(() => {
     const stored = loadMedicines();
+    // State load after mount is intentional to keep SSR and client markup in sync.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMedicines(stored);
     setMounted(true);
   }, []);
@@ -90,10 +101,12 @@ export default function Home() {
     }
 
     const newMedicine: Medicine = {
+      id: makeId(),
       name: trimmedName,
       dose: dose.trim() || undefined,
       time: trimmedTime,
       notes: notes.trim() || undefined,
+      status: "pending",
     };
 
     setMedicines((prev) => [...prev, newMedicine]);
@@ -103,6 +116,25 @@ export default function Home() {
     setNotes("");
     setError(null);
   };
+
+  const toggleStatus = (id: string) => {
+    setMedicines((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? { ...item, status: item.status === "taken" ? "pending" : "taken" }
+          : item
+      )
+    );
+  };
+
+  const deleteMedicine = (id: string) => {
+    setMedicines((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const statusBadge = (status: Medicine["status"]) =>
+    status === "taken"
+      ? "badge bg-success-subtle text-success border border-success-subtle"
+      : "badge bg-secondary-subtle text-secondary border border-secondary-subtle";
 
   return (
     <main className="container py-5">
@@ -125,7 +157,9 @@ export default function Home() {
               <form className="row g-3" onSubmit={handleSubmit} noValidate>
                 {error && (
                   <div className="col-12">
-                    <div className="alert alert-danger mb-0 py-2">{error}</div>
+                    <div className="alert alert-danger mb-0 py-2" role="alert">
+                      {error}
+                    </div>
                   </div>
                 )}
                 <div className="col-sm-6">
@@ -153,6 +187,7 @@ export default function Home() {
                     placeholder="e.g. 75 mg"
                     value={dose}
                     onChange={(e) => setDose(e.target.value)}
+                    autoComplete="off"
                   />
                 </div>
                 <div className="col-sm-6">
@@ -167,6 +202,7 @@ export default function Home() {
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
                     required
+                    autoComplete="off"
                   />
                 </div>
                 <div className="col-sm-6">
@@ -180,10 +216,11 @@ export default function Home() {
                     placeholder="e.g. With food"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
+                    autoComplete="off"
                   />
                 </div>
                 <div className="col-12">
-                  <button type="submit" className="btn btn-primary px-4">
+                  <button type="submit" className="btn btn-primary px-4 w-100 w-sm-auto">
                     Save medicine
                   </button>
                 </div>
@@ -201,28 +238,59 @@ export default function Home() {
                   {todaysSchedule.length} due
                 </span>
               </div>
-              <div className="table-responsive">
-                <table className="table align-middle mb-0">
-                  <thead className="table-light">
-                    <tr>
-                      <th scope="col">Name</th>
-                      <th scope="col">Dose</th>
-                      <th scope="col">Time</th>
-                      <th scope="col">Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {todaysSchedule.map((item) => (
-                      <tr key={`${item.name}-${item.time}-${item.notes ?? ""}`}>
-                        <td className="fw-semibold">{item.name}</td>
-                        <td>{item.dose}</td>
-                        <td>{formatTime(item.time)}</td>
-                        <td className="text-secondary">{item.notes}</td>
+              {!mounted ? (
+                <div className="text-secondary">Loading your schedule...</div>
+              ) : todaysSchedule.length === 0 ? (
+                <div className="text-secondary">No medicines scheduled yet.</div>
+              ) : (
+                <div className="table-responsive">
+                  <table className="table align-middle mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Dose</th>
+                        <th scope="col">Time</th>
+                        <th scope="col">Notes</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {todaysSchedule.map((item) => (
+                        <tr key={item.id}>
+                          <td className="fw-semibold">{item.name}</td>
+                          <td>{item.dose}</td>
+                          <td>{formatTime(item.time)}</td>
+                          <td className="text-secondary">{item.notes}</td>
+                          <td>
+                            <span className={statusBadge(item.status)}>
+                              {item.status === "taken" ? "Taken" : "Pending"}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="d-flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-primary"
+                                onClick={() => toggleStatus(item.id)}
+                              >
+                                {item.status === "taken" ? "Mark Pending" : "Mark Taken"}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-danger"
+                                onClick={() => deleteMedicine(item.id)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -237,9 +305,16 @@ export default function Home() {
                 </span>
               </div>
               <div className="d-flex flex-wrap gap-2">
-                {medicines.map((med) => (
+                {!mounted ? (
+                  <span className="text-secondary">Loading your medicines...</span>
+                ) : medicines.length === 0 ? (
+                  <span className="text-secondary">
+                    Nothing here yet. Add your first medicine to get started.
+                  </span>
+                ) : (
+                  medicines.map((med) => (
                   <div
-                    key={med.name}
+                    key={med.id}
                     className="border rounded-3 px-3 py-2 bg-light d-flex flex-column"
                     style={{ minWidth: "170px" }}
                   >
@@ -249,8 +324,19 @@ export default function Home() {
                       {med.time ? formatTime(med.time) : ""}
                     </span>
                     <span className="text-secondary small">{med.notes}</span>
+                    <span className={`${statusBadge(med.status)} mt-2 align-self-start`}>
+                      {med.status === "taken" ? "Taken today" : "Pending"}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-link text-danger p-0 mt-2 align-self-start"
+                      onClick={() => deleteMedicine(med.id)}
+                    >
+                      Delete
+                    </button>
                   </div>
-                ))}
+                ))
+                )}
               </div>
             </div>
           </div>
