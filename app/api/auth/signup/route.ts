@@ -1,43 +1,20 @@
 import { NextRequest } from "next/server";
 
-import { ApiError, json, readJson, withErrorHandling } from "@/lib/http";
 import { getEnv } from "@/lib/env";
-import { hashPassword, requireSession } from "@/lib/auth";
+import { ApiError, json, readJson, withErrorHandling } from "@/lib/http";
+import { hashPassword, issueSessionToken, setSessionCookie } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-type CreateUserPayload = {
+type SignupBody = {
   email?: string;
   password?: string;
 };
 
-export const GET = withErrorHandling(async (request: NextRequest) => {
-  await getEnv({ requireAuthSecret: true });
-  const session = await requireSession(request);
-
-  const currentUser = await prisma.user.findUnique({
-    where: { id: session.sub },
-    select: { id: true, email: true, createdAt: true },
-  });
-
-  if (!currentUser) {
-    throw new ApiError(404, "User not found");
-  }
-
-  const users = await prisma.user.findMany({
-    select: { id: true, email: true, createdAt: true },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
-
-  return json({ currentUser, users });
-});
-
 export const POST = withErrorHandling(async (request: NextRequest) => {
   await getEnv({ requireAuthSecret: true });
-  await requireSession(request);
-  const body = await readJson<CreateUserPayload>(request);
+  const body = await readJson<SignupBody>(request);
 
   const email = body.email?.trim().toLowerCase();
   const password = body.password?.trim();
@@ -61,5 +38,8 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     select: { id: true, email: true, createdAt: true },
   });
 
-  return json(user, { status: 201 });
+  const token = await issueSessionToken({ sub: user.id, email: user.email });
+  const response = json({ user }, { status: 201 });
+  setSessionCookie(response, token);
+  return response;
 });
