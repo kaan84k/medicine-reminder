@@ -1,0 +1,53 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  passwordHash String
+  medicines    Medicine[]
+  createdAt    DateTime  @default(now())
+}
+
+model Medicine {
+  id         String            @id @default(uuid()) @db.Uuid
+  userId     String            @db.Uuid
+  name       String
+  dose       String?
+  time       String
+  notes      String?
+  statuses   ReminderStatus[]
+  createdAt  DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model ReminderStatus {
+  id          String            @id @default(uuid()) @db.Uuid
+  medicineId  String            @db.Uuid
+  date        DateTime
+  status      ReminderState
+
+  medicine Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+
+  @@unique([medicineId, date])
+  @@index([medicineId])
+}
+
+enum ReminderState {
+  Pending
+  Taken
+}
