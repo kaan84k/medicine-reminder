@@ -41,6 +41,7 @@ Then open [http://localhost:3000](http://localhost:3000).
   - Create migration and apply: `npx prisma migrate dev --name init`
   - Regenerate client only: `npm run prisma:generate`
   - Inspect data: `npm run prisma:studio` (runs headless; open the printed URL)
+- A migration SQL (`prisma/migrations/0001_init/migration.sql`) has been generated; run `prisma migrate dev` against a running database to apply it.
 - Models:
   - `User` — `id`, `email`, `passwordHash`, `createdAt`, relation to `Medicine`.
   - `Medicine` — `id`, `userId` (FK), `name`, `dose`, `time`, `notes`, `createdAt`, relation to `ReminderStatus`.
@@ -49,9 +50,12 @@ Then open [http://localhost:3000](http://localhost:3000).
 ## API foundation
 
 - `GET /api/health` – readiness endpoint that reports environment status.
-- `POST /api/auth` – development token generator (requires `email` or `userId`).
-- `GET /api/users` – returns placeholder user data.
-- `POST /api/users` – accepts user payload and echoes a created user with an ID.
+- `POST /api/auth/signup` – register with `email`/`password`, hashes via bcrypt, and issues an HTTP-only session cookie.
+- `POST /api/auth/login` – sign in with `email`/`password`, issues an HTTP-only session cookie.
+- `POST /api/auth/logout` – clears the session cookie.
+- `GET /api/auth` – returns the current session payload when authenticated.
+- `GET /api/users` – protected; returns the current user plus a recent user list.
+- `POST /api/users` – protected; create another user (requires `email` and `password`).
 
 ## Tooling
 
