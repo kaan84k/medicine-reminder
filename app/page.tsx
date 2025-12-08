@@ -144,8 +144,8 @@ export default function Home() {
         </p>
         <h1 className="display-5 fw-semibold mb-2">Keep your doses on track</h1>
         <p className="text-secondary mb-0">
-          Add new medicines, check what&apos;s due today, and keep a simple list
-          of everything you take.
+          Add new medicines, check what&apos;s due today, and keep a simple list of
+          everything you take.
         </p>
       </div>
 
@@ -313,29 +313,31 @@ export default function Home() {
                   </span>
                 ) : (
                   medicines.map((med) => (
-                  <div
-                    key={med.id}
-                    className="border rounded-3 px-3 py-2 bg-light d-flex flex-column"
-                    style={{ minWidth: "170px" }}
-                  >
-                    <span className="fw-semibold">{med.name}</span>
-                    <span className="text-secondary small">{med.dose}</span>
-                    <span className="text-secondary small">
-                      {med.time ? formatTime(med.time) : ""}
-                    </span>
-                    <span className="text-secondary small">{med.notes}</span>
-                    <span className={`${statusBadge(med.status)} mt-2 align-self-start`}>
-                      {med.status === "taken" ? "Taken today" : "Pending"}
-                    </span>
-                    <button
-                      type="button"
-                      className="btn btn-link text-danger p-0 mt-2 align-self-start"
-                      onClick={() => deleteMedicine(med.id)}
+                    <div
+                      key={med.id}
+                      className="border rounded-3 px-3 py-2 bg-light d-flex flex-column"
+                      style={{ minWidth: "170px" }}
                     >
-                      Delete
-                    </button>
-                  </div>
-                ))
+                      <span className="fw-semibold">{med.name}</span>
+                      <span className="text-secondary small">{med.dose}</span>
+                      <span className="text-secondary small">
+                        {med.time ? formatTime(med.time) : ""}
+                      </span>
+                      <span className="text-secondary small">{med.notes}</span>
+                      <span
+                        className={`${statusBadge(med.status)} mt-2 align-self-start`}
+                      >
+                        {med.status === "taken" ? "Taken today" : "Pending"}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-link text-danger p-0 mt-2 align-self-start"
+                        onClick={() => deleteMedicine(med.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))
                 )}
               </div>
             </div>
