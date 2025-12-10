@@ -61,6 +61,9 @@ Then open [http://localhost:3000](http://localhost:3000).
 - `GET /api/medicines/:id` – protected; fetch a single medicine owned by the user.
 - `PUT /api/medicines/:id` – protected; update a medicine (validates provided fields).
 - `DELETE /api/medicines/:id` – protected; delete a medicine.
+- `POST /api/reminders/:medicineId` – protected; create today’s reminder for a medicine (idempotent, defaults to Pending).
+- `PATCH /api/reminders/:id` – protected; update a reminder status (`Pending`/`Taken`).
+- `GET /api/reminders/today` – protected; ensure today’s reminders exist for all medicines and return them.
 
 ## Tooling
 
