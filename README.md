@@ -56,6 +56,11 @@ Then open [http://localhost:3000](http://localhost:3000).
 - `GET /api/auth` – returns the current session payload when authenticated.
 - `GET /api/users` – protected; returns the current user plus a recent user list.
 - `POST /api/users` – protected; create another user (requires `email` and `password`).
+- `GET /api/medicines` – protected; list medicines for the authenticated user.
+- `POST /api/medicines` – protected; create a medicine (`name`, `time`, optional `dose`, `notes`).
+- `GET /api/medicines/:id` – protected; fetch a single medicine owned by the user.
+- `PUT /api/medicines/:id` – protected; update a medicine (validates provided fields).
+- `DELETE /api/medicines/:id` – protected; delete a medicine.
 
 ## Tooling
 
