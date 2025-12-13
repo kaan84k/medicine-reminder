@@ -4,6 +4,7 @@ import { ApiError, json, readJson, withErrorHandling } from "@/lib/http";
 import { getEnv } from "@/lib/env";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -39,6 +40,7 @@ const normalizeBody = (body: MedicineBody) => {
 export const POST = withErrorHandling(async (request: NextRequest) => {
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(request);
+  rateLimit(request, "medicines:create", 30, 60_000);
   const body = await readJson<MedicineBody>(request);
   const parsed = normalizeBody(body);
 
@@ -55,6 +57,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 export const GET = withErrorHandling(async (request: NextRequest) => {
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(request);
+  rateLimit(request, "medicines:list", 60, 60_000);
 
   const medicines = await prisma.medicine.findMany({
     where: { userId: session.sub },
