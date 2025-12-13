@@ -4,6 +4,7 @@ import { getEnv } from "@/lib/env";
 import { ApiError, json, readJson, withErrorHandling } from "@/lib/http";
 import { hashPassword, issueSessionToken, setSessionCookie } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,7 @@ type SignupBody = {
 
 export const POST = withErrorHandling(async (request: NextRequest) => {
   await getEnv({ requireAuthSecret: true });
+  rateLimit(request, "auth:signup", 5, 60_000);
   const body = await readJson<SignupBody>(request);
 
   const email = body.email?.trim().toLowerCase();

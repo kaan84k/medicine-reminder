@@ -4,6 +4,7 @@ import { ApiError, json, readJson, withErrorHandling } from "@/lib/http";
 import { getEnv } from "@/lib/env";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -67,6 +68,7 @@ const resolveParams = async (context: unknown) => {
 export const GET = withErrorHandling(async (_request: NextRequest, context) => {
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(_request);
+  rateLimit(_request, "medicines:get", 60, 60_000);
   const params = await resolveParams(context);
   const id = params?.id as string | undefined;
 
@@ -88,6 +90,7 @@ export const GET = withErrorHandling(async (_request: NextRequest, context) => {
 export const PUT = withErrorHandling(async (request: NextRequest, context) => {
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(request);
+  rateLimit(request, "medicines:update", 30, 60_000);
   const params = await resolveParams(context);
   const id = params?.id as string | undefined;
 
@@ -111,6 +114,7 @@ export const PUT = withErrorHandling(async (request: NextRequest, context) => {
 export const DELETE = withErrorHandling(async (request: NextRequest, context) => {
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(request);
+  rateLimit(request, "medicines:delete", 20, 60_000);
   const params = await resolveParams(context);
   const id = params?.id as string | undefined;
 
