@@ -1,22 +1,23 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Medicine = {
   id: string;
   name: string;
-  dose?: string;
+  dose: string | null;
   time: string;
-  notes?: string;
-  status: "pending" | "taken";
+  notes: string | null;
 };
 
-const STORAGE_KEY = "medicine_reminders_v1";
-
-const makeId = () =>
-  typeof crypto !== "undefined" && crypto.randomUUID
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
+type Reminder = {
+  id: string;
+  medicineId: string;
+  date: string;
+  status: "Pending" | "Taken";
+  medicine: Medicine;
+};
 
 const formatTime = (time: string) => {
   if (!time) return "";
@@ -27,114 +28,162 @@ const formatTime = (time: string) => {
   return `${displayHour.toString().padStart(2, "0")}:${minute} ${suffix}`;
 };
 
-const loadMedicines = (): Medicine[] => {
-  if (typeof window === "undefined") return [];
+const statusBadge = (status: Reminder["status"]) =>
+  status === "Taken"
+    ? "badge bg-success-subtle text-success border border-success-subtle"
+    : "badge bg-secondary-subtle text-secondary border border-secondary-subtle";
 
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return [];
-    const parsed = JSON.parse(stored);
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed
-      .filter((item) => item && typeof item === "object")
-      .map((item) => ({
-        id: typeof item.id === "string" ? item.id : makeId(),
-        name: typeof item.name === "string" ? item.name : "",
-        dose: typeof item.dose === "string" ? item.dose : undefined,
-        time: typeof item.time === "string" ? item.time : "",
-        notes: typeof item.notes === "string" ? item.notes : undefined,
-        status: item.status === "taken" ? "taken" : "pending",
-      }))
-      .filter((item) => item.name && item.time);
-  } catch (error) {
-    console.warn("Unable to read medicines from storage, resetting.", error);
-    return [];
-  }
+const normalizeError = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  return "Unexpected error occurred.";
 };
 
 export default function Home() {
-  // Do NOT read localStorage during initial render — start with empty array to match SSR.
-  const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const router = useRouter();
+  const [session, setSession] = useState<{ sub: string; email: string } | null>(null);
 
-  // Track if component has mounted on the client.
-  const [mounted, setMounted] = useState(false);
+  const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [dataError, setDataError] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [dose, setDose] = useState("");
   const [time, setTime] = useState("");
   const [notes, setNotes] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  // Load medicines from localStorage after mount (client-only).
-  useEffect(() => {
-    const stored = loadMedicines();
-    // State load after mount is intentional to keep SSR and client markup in sync.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMedicines(stored);
-    setMounted(true);
-  }, []);
-
-  // Persist to localStorage only after we've mounted and loaded the real data.
-  useEffect(() => {
-    if (!mounted) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(medicines));
-    } catch (error) {
-      console.warn("Unable to persist medicines:", error);
-    }
-  }, [medicines, mounted]);
-
-  const todaysSchedule = useMemo(
-    () => [...medicines].sort((a, b) => a.time.localeCompare(b.time)),
-    [medicines]
+  const sortedSchedule = useMemo(
+    () =>
+      [...reminders].sort((a, b) => {
+        return a.medicine.time.localeCompare(b.medicine.time);
+      }),
+    [reminders]
   );
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const isSignedIn = Boolean(session);
+
+  const fetchJson = useCallback(
+    async <T,>(input: RequestInfo | URL, init?: RequestInit) => {
+      const response = await fetch(input, {
+        ...init,
+        headers: {
+          "content-type": "application/json",
+          ...(init?.headers || {}),
+        },
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        const errorMessage =
+          typeof body.error === "string" ? body.error : response.statusText;
+        throw new Error(errorMessage);
+      }
+
+      return (await response.json()) as T;
+    },
+    []
+  );
+
+  const loadSession = useCallback(async () => {
+    try {
+      const data = await fetchJson<{ session: { sub: string; email: string } }>(
+        "/api/auth"
+      );
+      setSession(data.session);
+      return true;
+    } catch {
+      setSession(null);
+      return false;
+    }
+  }, [fetchJson]);
+
+  const loadData = useCallback(async () => {
+    setDataLoading(true);
+    setDataError(null);
+    try {
+      const [medsResp, remindersResp] = await Promise.all([
+        fetchJson<{ medicines: Medicine[] }>("/api/medicines"),
+        fetchJson<{ date: string; reminders: Reminder[] }>("/api/reminders/today"),
+      ]);
+      setMedicines(medsResp.medicines);
+      setReminders(remindersResp.reminders);
+    } catch (error) {
+      setDataError(normalizeError(error));
+    } finally {
+      setDataLoading(false);
+    }
+  }, [fetchJson]);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedName = name.trim();
     const trimmedTime = time.trim();
 
     if (!trimmedName || !trimmedTime) {
-      setError("Name and Time are required.");
+      setFormError("Name and Time are required.");
       return;
     }
 
-    const newMedicine: Medicine = {
-      id: makeId(),
-      name: trimmedName,
-      dose: dose.trim() || undefined,
-      time: trimmedTime,
-      notes: notes.trim() || undefined,
-      status: "pending",
-    };
-
-    setMedicines((prev) => [...prev, newMedicine]);
-    setName("");
-    setDose("");
-    setTime("");
-    setNotes("");
-    setError(null);
+    try {
+      await fetchJson("/api/medicines", {
+        method: "POST",
+        body: JSON.stringify({
+          name: trimmedName,
+          time: trimmedTime,
+          dose: dose.trim() || null,
+          notes: notes.trim() || null,
+        }),
+      });
+      setName("");
+      setDose("");
+      setTime("");
+      setNotes("");
+      setFormError(null);
+      await loadData();
+    } catch (error) {
+      setFormError(normalizeError(error));
+    }
   };
 
-  const toggleStatus = (id: string) => {
-    setMedicines((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? { ...item, status: item.status === "taken" ? "pending" : "taken" }
-          : item
-      )
-    );
+  const toggleStatus = async (reminderId: string) => {
+    const reminder = reminders.find((item) => item.id === reminderId);
+    if (!reminder) return;
+    const nextStatus = reminder.status === "Taken" ? "Pending" : "Taken";
+    try {
+      const updated = await fetchJson<Reminder>(`/api/reminders/${reminderId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      setReminders((prev) =>
+        prev.map((item) => (item.id === reminderId ? updated : item))
+      );
+    } catch (error) {
+      setDataError(normalizeError(error));
+    }
   };
 
-  const deleteMedicine = (id: string) => {
-    setMedicines((prev) => prev.filter((item) => item.id !== id));
+  const deleteMedicine = async (id: string) => {
+    try {
+      await fetchJson(`/api/medicines/${id}`, { method: "DELETE" });
+      setMedicines((prev) => prev.filter((item) => item.id !== id));
+      setReminders((prev) => prev.filter((item) => item.medicineId !== id));
+    } catch (error) {
+      setDataError(normalizeError(error));
+    }
   };
 
-  const statusBadge = (status: Medicine["status"]) =>
-    status === "taken"
-      ? "badge bg-success-subtle text-success border border-success-subtle"
-      : "badge bg-secondary-subtle text-secondary border border-secondary-subtle";
+  useEffect(() => {
+    (async () => {
+      const hasSession = await loadSession();
+      if (hasSession) {
+        await loadData();
+      } else {
+        router.replace("/login");
+      }
+    })();
+  }, [loadData, loadSession, router]);
 
   return (
     <main className="container py-5">
@@ -155,10 +204,10 @@ export default function Home() {
             <div className="card-body">
               <h2 className="h5 fw-semibold mb-3">Add Medicine</h2>
               <form className="row g-3" onSubmit={handleSubmit} noValidate>
-                {error && (
+                {formError && (
                   <div className="col-12">
                     <div className="alert alert-danger mb-0 py-2" role="alert">
-                      {error}
+                      {formError}
                     </div>
                   </div>
                 )}
@@ -220,11 +269,20 @@ export default function Home() {
                   />
                 </div>
                 <div className="col-12">
-                  <button type="submit" className="btn btn-primary px-4 w-100 w-sm-auto">
+                  <button
+                    type="submit"
+                    className="btn btn-primary px-4 w-100 w-sm-auto"
+                    disabled={!isSignedIn}
+                  >
                     Save medicine
                   </button>
                 </div>
               </form>
+              {!isSignedIn && (
+                <p className="text-secondary small mb-0 mt-2">
+                  You must sign in to add medicines. Redirecting to login...
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -235,12 +293,18 @@ export default function Home() {
               <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 mb-3">
                 <h2 className="h5 fw-semibold mb-0">Today&apos;s Schedule</h2>
                 <span className="badge bg-success-subtle text-success border border-success-subtle">
-                  {todaysSchedule.length} due
+                  {sortedSchedule.length} due
                 </span>
               </div>
-              {!mounted ? (
+              {!isSignedIn && (
+                <div className="alert alert-warning py-2">
+                  Sign in to load today&apos;s reminders.
+                </div>
+              )}
+              {dataError && <div className="alert alert-danger py-2">{dataError}</div>}
+              {dataLoading ? (
                 <div className="text-secondary">Loading your schedule...</div>
-              ) : todaysSchedule.length === 0 ? (
+              ) : sortedSchedule.length === 0 ? (
                 <div className="text-secondary">No medicines scheduled yet.</div>
               ) : (
                 <div className="table-responsive">
@@ -256,15 +320,15 @@ export default function Home() {
                       </tr>
                     </thead>
                     <tbody>
-                      {todaysSchedule.map((item) => (
+                      {sortedSchedule.map((item) => (
                         <tr key={item.id}>
-                          <td className="fw-semibold">{item.name}</td>
-                          <td>{item.dose}</td>
-                          <td>{formatTime(item.time)}</td>
-                          <td className="text-secondary">{item.notes}</td>
+                          <td className="fw-semibold">{item.medicine.name}</td>
+                          <td>{item.medicine.dose}</td>
+                          <td>{formatTime(item.medicine.time)}</td>
+                          <td className="text-secondary">{item.medicine.notes}</td>
                           <td>
                             <span className={statusBadge(item.status)}>
-                              {item.status === "taken" ? "Taken" : "Pending"}
+                              {item.status}
                             </span>
                           </td>
                           <td>
@@ -274,12 +338,12 @@ export default function Home() {
                                 className="btn btn-sm btn-outline-primary"
                                 onClick={() => toggleStatus(item.id)}
                               >
-                                {item.status === "taken" ? "Mark Pending" : "Mark Taken"}
+                                {item.status === "Taken" ? "Mark Pending" : "Mark Taken"}
                               </button>
                               <button
                                 type="button"
                                 className="btn btn-sm btn-outline-danger"
-                                onClick={() => deleteMedicine(item.id)}
+                                onClick={() => deleteMedicine(item.medicineId)}
                               >
                                 Delete
                               </button>
@@ -305,7 +369,7 @@ export default function Home() {
                 </span>
               </div>
               <div className="d-flex flex-wrap gap-2">
-                {!mounted ? (
+                {dataLoading ? (
                   <span className="text-secondary">Loading your medicines...</span>
                 ) : medicines.length === 0 ? (
                   <span className="text-secondary">
@@ -324,11 +388,6 @@ export default function Home() {
                         {med.time ? formatTime(med.time) : ""}
                       </span>
                       <span className="text-secondary small">{med.notes}</span>
-                      <span
-                        className={`${statusBadge(med.status)} mt-2 align-self-start`}
-                      >
-                        {med.status === "taken" ? "Taken today" : "Pending"}
-                      </span>
                       <button
                         type="button"
                         className="btn btn-link text-danger p-0 mt-2 align-self-start"

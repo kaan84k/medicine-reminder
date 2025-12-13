@@ -56,10 +56,19 @@ const ensureOwnedMedicine = async (id: string, userId: string) => {
   return medicine;
 };
 
+const resolveParams = async (context: unknown) => {
+  const maybeParams = (context as { params?: unknown })?.params;
+  if (maybeParams && typeof (maybeParams as Promise<unknown>).then === "function") {
+    return await (maybeParams as Promise<Record<string, string>>);
+  }
+  return maybeParams as Record<string, string> | undefined;
+};
+
 export const GET = withErrorHandling(async (_request: NextRequest, context) => {
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(_request);
-  const id = context.params?.id as string | undefined;
+  const params = await resolveParams(context);
+  const id = params?.id as string | undefined;
 
   if (!id) {
     throw new ApiError(400, "id is required");
@@ -79,7 +88,8 @@ export const GET = withErrorHandling(async (_request: NextRequest, context) => {
 export const PUT = withErrorHandling(async (request: NextRequest, context) => {
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(request);
-  const id = context.params?.id as string | undefined;
+  const params = await resolveParams(context);
+  const id = params?.id as string | undefined;
 
   if (!id) {
     throw new ApiError(400, "id is required");
@@ -101,7 +111,8 @@ export const PUT = withErrorHandling(async (request: NextRequest, context) => {
 export const DELETE = withErrorHandling(async (request: NextRequest, context) => {
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(request);
-  const id = context.params?.id as string | undefined;
+  const params = await resolveParams(context);
+  const id = params?.id as string | undefined;
 
   if (!id) {
     throw new ApiError(400, "id is required");

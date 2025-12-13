@@ -13,12 +13,12 @@ export class ApiError extends Error {
 }
 
 type HandlerResult = NextResponse | Response | Promise<NextResponse | Response>;
-type RouteHandler = (request: NextRequest) => HandlerResult;
+type RouteHandler = (request: NextRequest, context?: unknown) => HandlerResult;
 
 export const withErrorHandling = (handler: RouteHandler) => {
-  return async (request: NextRequest) => {
+  return async (request: NextRequest, context?: unknown) => {
     try {
-      return await handler(request);
+      return await handler(request, context);
     } catch (error) {
       if (error instanceof ApiError) {
         return NextResponse.json({ error: error.message }, { status: error.status });
