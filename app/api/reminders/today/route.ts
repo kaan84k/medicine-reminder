@@ -54,7 +54,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     include: {
       medicine: { select: { id: true, name: true, dose: true, time: true, notes: true } },
     },
-    orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+    orderBy: [{ date: "asc" }, { id: "asc" }],
   });
 
   return json({

@@ -19,10 +19,19 @@ const assertStatus = (status: unknown): ReminderState => {
   throw new ApiError(400, "status must be Pending or Taken");
 };
 
+const resolveParams = async (context: unknown) => {
+  const maybeParams = (context as { params?: unknown })?.params;
+  if (maybeParams && typeof (maybeParams as Promise<unknown>).then === "function") {
+    return await (maybeParams as Promise<Record<string, string>>);
+  }
+  return maybeParams as Record<string, string> | undefined;
+};
+
 export const POST = withErrorHandling(async (request: NextRequest, context) => {
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(request);
-  const medicineId = context.params?.id as string | undefined;
+  const params = await resolveParams(context);
+  const medicineId = params?.id as string | undefined;
 
   if (!medicineId) {
     throw new ApiError(400, "medicineId is required");
@@ -49,6 +58,9 @@ export const POST = withErrorHandling(async (request: NextRequest, context) => {
 
   const existing = await prisma.reminderStatus.findFirst({
     where: { medicineId, date: { gte: start, lt: end } },
+    include: {
+      medicine: { select: { id: true, name: true, dose: true, time: true, notes: true } },
+    },
   });
 
   if (existing) {
@@ -61,6 +73,9 @@ export const POST = withErrorHandling(async (request: NextRequest, context) => {
       date: start,
       status,
     },
+    include: {
+      medicine: { select: { id: true, name: true, dose: true, time: true, notes: true } },
+    },
   });
 
   return json(reminder, { status: 201 });
@@ -69,7 +84,8 @@ export const POST = withErrorHandling(async (request: NextRequest, context) => {
 export const PATCH = withErrorHandling(async (request: NextRequest, context) => {
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(request);
-  const reminderId = context.params?.id as string | undefined;
+  const params = await resolveParams(context);
+  const reminderId = params?.id as string | undefined;
 
   if (!reminderId) {
     throw new ApiError(400, "id is required");
@@ -95,6 +111,9 @@ export const PATCH = withErrorHandling(async (request: NextRequest, context) => 
   const updated = await prisma.reminderStatus.update({
     where: { id: reminderId },
     data: { status },
+    include: {
+      medicine: { select: { id: true, name: true, dose: true, time: true, notes: true } },
+    },
   });
 
   return json(updated);

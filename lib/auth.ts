@@ -64,7 +64,7 @@ export const clearSessionCookie = (response: NextResponse) => {
 
 export const getSessionFromRequest = async (request: NextRequest) => {
   const headerToken = request.headers.get("authorization")?.replace("Bearer ", "");
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const cookieToken = cookieStore.get(SESSION_COOKIE)?.value;
   const token = headerToken || cookieToken;
   if (!token) {
@@ -85,4 +85,16 @@ export const requireSession = async (request: NextRequest) => {
     throw new ApiError(401, "Unauthorized");
   }
   return session;
+};
+
+export const getServerSession = async () => {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  if (!token) return null;
+  try {
+    return await verifySessionToken(token);
+  } catch (error) {
+    console.warn("Invalid session token on server", error);
+    return null;
+  }
 };
