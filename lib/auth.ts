@@ -64,9 +64,19 @@ export const clearSessionCookie = (response: NextResponse) => {
 
 export const getSessionFromRequest = async (request: NextRequest) => {
   const headerToken = request.headers.get("authorization")?.replace("Bearer ", "");
-  const cookieStore = await cookies();
-  const cookieToken = cookieStore.get(SESSION_COOKIE)?.value;
-  const token = headerToken || cookieToken;
+  const requestCookieToken = request.cookies.get(SESSION_COOKIE)?.value;
+  let token = headerToken || requestCookieToken;
+
+  if (!token) {
+    try {
+      const cookieStore = await cookies();
+      token = cookieStore.get(SESSION_COOKIE)?.value;
+    } catch (error) {
+      // When running outside the Next.js request context (e.g., unit tests),
+      // cookies() is not available. In that case, skip silently.
+    }
+  }
+
   if (!token) {
     return null;
   }

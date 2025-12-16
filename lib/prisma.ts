@@ -1,9 +1,13 @@
 // lib/prisma.ts
-import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "@prisma/client";
 import pg from "pg";
 
-const connectionString = process.env.DATABASE_URL!;
+const connectionString = process.env.DATABASE_URL || process.env.TEST_DATABASE_URL;
+
+if (!connectionString) {
+  throw new Error("DATABASE_URL (or TEST_DATABASE_URL) must be set.");
+}
 const pool = new pg.Pool({ connectionString });
 const adapter = new PrismaPg(pool);
 
