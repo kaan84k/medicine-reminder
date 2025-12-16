@@ -70,6 +70,13 @@ Then open [http://localhost:3000](http://localhost:3000).
 - Lint: `npm run lint`
 - Prettier check: `npm run format:check`
 - Prettier write: `npm run format`
+- Tests (Vitest): `npm test` (watch: `npm run test:watch`)
+
+## Testing
+
+- Use a dedicated Postgres URL via `TEST_DATABASE_URL` (or `DATABASE_URL`). `.env.test` is loaded automatically when running tests.
+- Apply migrations to the test database first: `DATABASE_URL=$TEST_DATABASE_URL npx prisma migrate deploy`.
+- Run the suite: `npm test`.
 
 ## Notes
 
