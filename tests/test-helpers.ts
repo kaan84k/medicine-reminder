@@ -24,14 +24,17 @@ export const jsonRequest = (
   });
 };
 
-export const createUser = async (overrides: { email?: string; password?: string } = {}) => {
+export const createUser = async (
+  overrides: { email?: string; password?: string; role?: "User" | "Admin" } = {}
+) => {
   const email = overrides.email ?? `user-${randomUUID()}@test.com`;
   const password = overrides.password ?? "password123";
+  const role = overrides.role ?? "User";
   const passwordHash = await hashPassword(password);
 
   const user = await prisma.user.create({
-    data: { email, passwordHash },
-    select: { id: true, email: true, createdAt: true },
+    data: { email, passwordHash, role },
+    select: { id: true, email: true, role: true, createdAt: true },
   });
 
   return { user, password };

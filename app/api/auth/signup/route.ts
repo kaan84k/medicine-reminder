@@ -15,7 +15,7 @@ type SignupBody = {
 
 export const POST = withErrorHandling(async (request: NextRequest) => {
   await getEnv({ requireAuthSecret: true });
-  rateLimit(request, "auth:signup", 5, 60_000);
+  await rateLimit(request, "auth:signup", 5, 60_000);
   const body = await readJson<SignupBody>(request);
 
   const email = body.email?.trim().toLowerCase();

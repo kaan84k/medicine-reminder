@@ -16,27 +16,33 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(request);
 
+  // Only ever return the caller's own record — never other users' PII.
   const currentUser = await prisma.user.findUnique({
     where: { id: session.sub },
-    select: { id: true, email: true, createdAt: true },
+    select: { id: true, email: true, role: true, createdAt: true },
   });
 
   if (!currentUser) {
     throw new ApiError(404, "User not found");
   }
 
-  const users = await prisma.user.findMany({
-    select: { id: true, email: true, createdAt: true },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
-
-  return json({ currentUser, users });
+  return json({ currentUser });
 });
 
 export const POST = withErrorHandling(async (request: NextRequest) => {
   await getEnv({ requireAuthSecret: true });
-  await requireSession(request);
+  const session = await requireSession(request);
+
+  // Admin-only: self-registration is handled by /api/auth/signup.
+  const actor = await prisma.user.findUnique({
+    where: { id: session.sub },
+    select: { role: true },
+  });
+
+  if (!actor || actor.role !== "Admin") {
+    throw new ApiError(403, "Forbidden");
+  }
+
   const body = await readJson<CreateUserPayload>(request);
 
   const email = body.email?.trim().toLowerCase();
@@ -58,7 +64,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   const passwordHash = await hashPassword(password);
   const user = await prisma.user.create({
     data: { email, passwordHash },
-    select: { id: true, email: true, createdAt: true },
+    select: { id: true, email: true, role: true, createdAt: true },
   });
 
   return json(user, { status: 201 });

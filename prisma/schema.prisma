@@ -17,6 +17,7 @@ model User {
   id           String    @id @default(uuid()) @db.Uuid
   email        String    @unique
   passwordHash String
+  role         Role      @default(User)
   medicines    Medicine[]
   createdAt    DateTime  @default(now())
 }
@@ -51,4 +52,9 @@ model ReminderStatus {
 enum ReminderState {
   Pending
   Taken
+}
+
+enum Role {
+  User
+  Admin
 }

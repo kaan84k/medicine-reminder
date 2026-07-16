@@ -68,7 +68,7 @@ const resolveParams = async (context: unknown) => {
 export const GET = withErrorHandling(async (_request: NextRequest, context) => {
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(_request);
-  rateLimit(_request, "medicines:get", 60, 60_000);
+  await rateLimit(_request, "medicines:get", 60, 60_000);
   const params = await resolveParams(context);
   const id = params?.id as string | undefined;
 
@@ -90,7 +90,7 @@ export const GET = withErrorHandling(async (_request: NextRequest, context) => {
 export const PUT = withErrorHandling(async (request: NextRequest, context) => {
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(request);
-  rateLimit(request, "medicines:update", 30, 60_000);
+  await rateLimit(request, "medicines:update", 30, 60_000);
   const params = await resolveParams(context);
   const id = params?.id as string | undefined;
 
@@ -114,7 +114,7 @@ export const PUT = withErrorHandling(async (request: NextRequest, context) => {
 export const DELETE = withErrorHandling(async (request: NextRequest, context) => {
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(request);
-  rateLimit(request, "medicines:delete", 20, 60_000);
+  await rateLimit(request, "medicines:delete", 20, 60_000);
   const params = await resolveParams(context);
   const id = params?.id as string | undefined;
 

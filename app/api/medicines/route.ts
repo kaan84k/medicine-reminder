@@ -40,7 +40,7 @@ const normalizeBody = (body: MedicineBody) => {
 export const POST = withErrorHandling(async (request: NextRequest) => {
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(request);
-  rateLimit(request, "medicines:create", 30, 60_000);
+  await rateLimit(request, "medicines:create", 30, 60_000);
   const body = await readJson<MedicineBody>(request);
   const parsed = normalizeBody(body);
 
@@ -57,7 +57,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 export const GET = withErrorHandling(async (request: NextRequest) => {
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(request);
-  rateLimit(request, "medicines:list", 60, 60_000);
+  await rateLimit(request, "medicines:list", 60, 60_000);
 
   const medicines = await prisma.medicine.findMany({
     where: { userId: session.sub },

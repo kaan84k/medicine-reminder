@@ -1,13 +1,13 @@
 # Medicine Reminder (MVP)
 
-Simple web app to record medicines, mark doses as taken, and keep a day-at-a-glance schedule. The app now includes a small Next.js API foundation to support future authenticated, multi-user work.
+Simple web app to record medicines, mark doses as taken, and keep a day-at-a-glance schedule. The app is authenticated and multi-user: the browser UI reads and writes through the Next.js API, which persists to PostgreSQL via Prisma.
 
 ## Tech stack
 
 - Next.js (App Router + API routes)
 - TypeScript
 - Bootstrap (via CDN)
-- LocalStorage (browser-only persistence)
+- PostgreSQL + Prisma (server-side persistence, per-user)
 
 ## Prerequisites
 
@@ -80,5 +80,5 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 ## Notes
 
-- Data is still stored only in `localStorage` under `medicine_reminders_v1`. Clearing site data removes entries.
-- Backend/API routes exist for future multi-user features but do not persist to a database yet.
+- All application data (medicines and reminder statuses) is persisted server-side in PostgreSQL, scoped to the authenticated user. Clearing browser site data does not remove it.
+- The dashboard (`app/page.tsx`) loads and mutates data exclusively through the API routes above; it holds no client-side source of truth. Unauthenticated visitors are redirected to `/login`.
