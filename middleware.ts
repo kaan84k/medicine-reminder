@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { isCsrfSafe } from "@/lib/csrf";
 
 const PUBLIC_PATHS = ["/api/health", "/api/auth/signup", "/api/auth/login"];
 
@@ -9,6 +10,12 @@ export async function middleware(request: NextRequest) {
 
   if (!pathname.startsWith("/api")) {
     return NextResponse.next();
+  }
+
+  // CSRF gate on state-changing requests — runs before the public-path bypass so
+  // login/signup POSTs are also protected against cross-origin submission.
+  if (!isCsrfSafe(request)) {
+    return NextResponse.json({ error: "CSRF validation failed" }, { status: 403 });
   }
 
   if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {

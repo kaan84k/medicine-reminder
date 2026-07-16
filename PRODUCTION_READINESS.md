@@ -74,14 +74,22 @@ Legend: **P0** = blocker (cannot ship), **P1** = required before public launch, 
 
 ## P1 — Required before public launch
 
-### P1-1. CSRF protection
+### P1-1. CSRF protection — ✅ DONE (code); runtime browser check pending
 **Problem:** Cookie-based auth with state-changing `POST/PUT/PATCH/DELETE`. `sameSite=lax` blocks most cross-site POST but is not sufficient alone.
 
-**Work:** Add a CSRF token (double-submit cookie or per-session token) validated on all mutating routes, OR require a custom header (e.g. `X-Requested-With`) that browsers cannot set cross-origin for simple requests, plus strict CORS.
+**What was changed:** chose the strict same-origin / CORS option (no token plumbing, no frontend change). New `lib/csrf.ts` `isCsrfSafe()`, enforced in `middleware.ts` on every `/api` request, **before** the public-path bypass so login/signup POSTs are covered too:
+- Safe methods (GET/HEAD/OPTIONS) always pass.
+- `Authorization: Bearer` requests are exempt — not cookie-driven, so not CSRF-prone (API/mobile clients).
+- Otherwise the request `Origin` (or `Referer` origin if Origin absent) must match the app's own origin (derived from `Host`) or the `ALLOWED_ORIGINS` allowlist. Mismatch, or a cookie mutation with neither header, → `403 CSRF validation failed`.
+- Origin is browser-set and unforgeable by cross-origin JS; same-origin relative-URL fetches send a matching Origin automatically.
+- Tests `tests/csrf.test.ts` (7, passing): safe methods, same-origin allow, cross-origin 403, Bearer exempt, missing-both reject, Referer fallback, allowlist.
 
 **Success criteria:**
-- [ ] Cross-origin mutating request without a valid token is rejected (403).
-- [ ] Same-origin app flows unaffected.
+- [x] Cross-origin mutating request is rejected (403). (Origin/Referer mismatch → 403; unit-tested.)
+- [x] Same-origin app flows unaffected. (Matching Origin passes; Bearer clients exempt.)
+- [ ] **Runtime:** verify in a real browser that the dashboard's POST/PATCH/DELETE flows still succeed and a cross-site POST is blocked — not run here (no live server). If a separate frontend domain is ever used, add it to `ALLOWED_ORIGINS`.
+
+**Config note:** `ALLOWED_ORIGINS` (comma-separated) only needed if the frontend is served from a different origin than the API; same-origin deploys need nothing.
 
 ### P1-2. Security headers
 **Problem:** `next.config.ts` sets no headers.
