@@ -6,7 +6,7 @@ Simple web app to record medicines, mark doses as taken, and keep a day-at-a-gla
 
 - Next.js (App Router + API routes)
 - TypeScript
-- Bootstrap (via CDN)
+- Bootstrap (self-hosted via npm; imported in `app/layout.tsx`)
 - PostgreSQL + Prisma (server-side persistence, per-user)
 
 ## Prerequisites

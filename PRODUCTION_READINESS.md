@@ -91,15 +91,22 @@ Legend: **P0** = blocker (cannot ship), **P1** = required before public launch, 
 
 **Config note:** `ALLOWED_ORIGINS` (comma-separated) only needed if the frontend is served from a different origin than the API; same-origin deploys need nothing.
 
-### P1-2. Security headers
-**Problem:** `next.config.ts` sets no headers.
+### P1-2. Security headers — ✅ DONE (verified locally); deployed-domain grade pending
+**Problem:** `next.config.ts` set no headers.
 
-**Work:** Add `Content-Security-Policy`, `Strict-Transport-Security`, `X-Frame-Options: DENY` (or CSP `frame-ancestors`), `X-Content-Type-Options: nosniff`, `Referrer-Policy`. Note: README references Bootstrap via CDN — CSP must allow or self-host it (prefer self-host).
+**What was changed:**
+- `next.config.ts` `headers()` now sets, on every route (`/:path*`): `Content-Security-Policy`, `Strict-Transport-Security` (`max-age=63072000; includeSubDomains; preload`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (camera/mic/geolocation/interest-cohort denied).
+- CSP: `default-src 'self'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'`, `upgrade-insecure-requests`. `script-src`/`style-src` allow `'unsafe-inline'` — **documented exception** (Next App Router injects nonce-less inline hydration scripts; strict `'self'` breaks the app). No `'unsafe-eval'`.
+- **Bootstrap self-hosted** (`npm i bootstrap`, imported in `app/layout.tsx`); the jsDelivr CDN `<link>` removed. CSP needs no external origins. README updated.
+- **Verified live:** started `next dev`, `curl -I /login` → all six headers present with the exact values above; page returned 200 (self-hosted Bootstrap renders).
 
 **Success criteria:**
-- [ ] `securityheaders.com` (or equivalent) grade A on the deployed domain.
-- [ ] CSP has no `unsafe-inline`/`unsafe-eval` for scripts (or documented exception).
-- [ ] HSTS present with `max-age >= 15552000`.
+- [x] CSP + HSTS + frame/content-type/referrer/permissions headers present on all routes. (curl-verified locally.)
+- [x] CSP has no `unsafe-inline`/`unsafe-eval` for scripts — met via **documented exception** for inline scripts (`'unsafe-inline'`, no `'unsafe-eval'`). A+ follow-up: nonce-based CSP in middleware to drop script `'unsafe-inline'`.
+- [x] HSTS present with `max-age >= 15552000`. (63072000.)
+- [ ] **Deployed:** run `securityheaders.com` against the live domain for the grade (expect A; A+ needs the nonce follow-up). Not runnable here (no public deploy).
+
+**Follow-up surfaced:** Next 16 warns `middleware` file convention is deprecated in favor of `proxy` — track under P2-4 / dependency hygiene. Non-blocking (middleware still runs).
 
 ### P1-3. Stronger auth policy + session handling
 **Problem:** Password min length 8, no complexity; `password.trim()` silently mutates input; 12h JWT with no revocation.
