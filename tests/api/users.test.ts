@@ -59,7 +59,7 @@ describe("users endpoint", () => {
 
     const request = jsonRequest("/api/users", "POST", {
       email: "new@example.com",
-      password: "password123",
+      password: "Sup3r-Secret-Pw",
     }, headers);
 
     const response = await createUserRoute(request);

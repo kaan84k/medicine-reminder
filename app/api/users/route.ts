@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { ApiError, json, readJson, withErrorHandling } from "@/lib/http";
 import { getEnv } from "@/lib/env";
 import { hashPassword, requireSession } from "@/lib/auth";
+import { assertStrongPassword } from "@/lib/password-policy";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -46,15 +47,13 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   const body = await readJson<CreateUserPayload>(request);
 
   const email = body.email?.trim().toLowerCase();
-  const password = body.password?.trim();
+  const password = body.password;
 
   if (!email || !password) {
     throw new ApiError(400, "email and password are required");
   }
 
-  if (password.length < 8) {
-    throw new ApiError(400, "password must be at least 8 characters");
-  }
+  assertStrongPassword(password, email);
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {

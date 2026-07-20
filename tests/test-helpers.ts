@@ -34,14 +34,17 @@ export const createUser = async (
 
   const user = await prisma.user.create({
     data: { email, passwordHash, role },
-    select: { id: true, email: true, role: true, createdAt: true },
+    select: { id: true, email: true, role: true, tokenVersion: true, createdAt: true },
   });
 
   return { user, password };
 };
 
-export const createAuthHeader = async (user: { id: string; email: string }) => {
-  const token = await issueSessionToken({ sub: user.id, email: user.email });
+export const createAuthHeader = async (
+  user: { id: string; email: string; tokenVersion?: number },
+  ver = user.tokenVersion ?? 0
+) => {
+  const token = await issueSessionToken({ sub: user.id, email: user.email, ver });
   return { authorization: `Bearer ${token}` };
 };
 
