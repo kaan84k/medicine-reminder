@@ -108,7 +108,7 @@ Legend: **P0** = blocker (cannot ship), **P1** = required before public launch, 
 
 **Follow-up surfaced:** Next 16 warns `middleware` file convention is deprecated in favor of `proxy` — track under P2-4 / dependency hygiene. Non-blocking (middleware still runs).
 
-### P1-3. Stronger auth policy + session handling
+### P1-3. Stronger auth policy + session handling ✅
 **Problem:** Password min length 8, no complexity; `password.trim()` silently mutates input; 12h JWT with no revocation.
 
 **Work:**
@@ -116,10 +116,21 @@ Legend: **P0** = blocker (cannot ship), **P1** = required before public launch, 
 - Add session revocation: store a session id / version and check it, or keep a short access token + refresh token, so logout and password change invalidate existing tokens.
 - Confirm `logout` invalidates server-side, not just the cookie.
 
+**Done:**
+- **Password policy** centralized in `lib/password-policy.ts` (`assertStrongPassword`): min length 12, must mix letters+numbers, rejects an embedded common/breached-password blocklist, rejects passwords containing the email local-part. Applied at `signup`, `users` POST, and `change-password`. Passwords are **no longer trimmed** — validated as typed, never mutated.
+- **Session revocation via `tokenVersion`** (new `User.tokenVersion Int @default(0)`, migration `0003_token_version`). The stateless JWT carries `ver`; `requireSession`/`getServerSession` compare it against the DB value on every protected request and 401 on mismatch. Prisma is lazily imported in `lib/auth.ts` so the Edge `middleware.ts` bundle stays Node-free (middleware remains a cheap signature pre-filter; revocation is enforced at the route layer, through which all protected routes pass).
+- **Logout** (`/api/auth/logout`) now increments `tokenVersion` server-side, invalidating every token issued before it — not just clearing the cookie.
+- **New `/api/auth/change-password`**: verifies current password, applies the policy to the new one, rotates the hash and bumps `tokenVersion` in one write (kills sessions on all devices), then re-issues a fresh cookie for the current caller.
+
 **Success criteria:**
-- [ ] Weak/breached passwords rejected with clear error.
-- [ ] After logout or password change, previously issued tokens no longer authenticate.
-- [ ] Session lifetime and refresh behavior documented.
+- [x] Weak/breached passwords rejected with clear error.
+- [x] After logout or password change, previously issued tokens no longer authenticate.
+- [x] Session lifetime and refresh behavior documented. (12h token, no sliding refresh — see README "Auth & sessions".)
+
+**Notes / follow-ups:**
+- Blocklist is a small offline stand-in for a full HIBP k-anonymity check (P2 candidate if breach coverage must be exhaustive).
+- Deploy invalidates all *existing* sessions (old tokens lack `ver`) — expected one-time re-login.
+- Tests added in `tests/api/auth.test.ts` (weak-password reject, logout revocation, change-password revocation, wrong-current-password). Not run in this environment — no Postgres; run `npm test` against a test DB to verify.
 
 ### P1-4. Health check that reflects real readiness
 **Problem:** `/api/health` should verify dependencies, not just env presence.

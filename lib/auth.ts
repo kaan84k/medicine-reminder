@@ -11,6 +11,10 @@ export const SESSION_COOKIE = "session-token";
 export type SessionPayload = {
   sub: string;
   email: string;
+  // Token version at issue time. Compared against the user's current
+  // tokenVersion on every protected request; a mismatch means the token was
+  // revoked (logout or password change) and is no longer valid.
+  ver: number;
 };
 
 const getSecretKey = async () => {
@@ -89,10 +93,33 @@ export const getSessionFromRequest = async (request: NextRequest) => {
   }
 };
 
+/**
+ * Confirm a decoded session token has not been revoked by comparing its `ver`
+ * against the user's current tokenVersion in the database.
+ *
+ * Prisma is imported lazily (dynamic import) on purpose: `lib/auth.ts` is also
+ * imported by the Edge `middleware.ts`, and statically importing the Prisma
+ * client would pull Node-only code into the Edge bundle. The dynamic import is
+ * code-split into its own chunk, so only the Node runtime (route handlers)
+ * loads it. Revocation is therefore enforced at the route level via
+ * requireSession/getServerSession, while middleware stays a cheap signature gate.
+ */
+const isSessionRevoked = async (session: SessionPayload): Promise<boolean> => {
+  const { prisma } = await import("@/lib/prisma");
+  const user = await prisma.user.findUnique({
+    where: { id: session.sub },
+    select: { tokenVersion: true },
+  });
+  return !user || user.tokenVersion !== session.ver;
+};
+
 export const requireSession = async (request: NextRequest) => {
   const session = await getSessionFromRequest(request);
   if (!session) {
     throw new ApiError(401, "Unauthorized");
+  }
+  if (await isSessionRevoked(session)) {
+    throw new ApiError(401, "Session expired");
   }
   return session;
 };
@@ -102,7 +129,11 @@ export const getServerSession = async () => {
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return null;
   try {
-    return await verifySessionToken(token);
+    const session = await verifySessionToken(token);
+    if (await isSessionRevoked(session)) {
+      return null;
+    }
+    return session;
   } catch (error) {
     console.warn("Invalid session token on server", error);
     return null;

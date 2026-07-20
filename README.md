@@ -52,7 +52,8 @@ Then open [http://localhost:3000](http://localhost:3000).
 - `GET /api/health` – readiness endpoint that reports environment status.
 - `POST /api/auth/signup` – register with `email`/`password`, hashes via bcrypt, and issues an HTTP-only session cookie.
 - `POST /api/auth/login` – sign in with `email`/`password`, issues an HTTP-only session cookie.
-- `POST /api/auth/logout` – clears the session cookie.
+- `POST /api/auth/logout` – clears the session cookie **and** bumps the user's `tokenVersion`, invalidating every previously issued token server-side.
+- `POST /api/auth/change-password` – protected; verifies `currentPassword`, applies the password policy to `newPassword`, rotates the hash, invalidates all existing sessions, and re-issues a cookie for the caller.
 - `GET /api/auth` – returns the current session payload when authenticated.
 - `GET /api/users` – protected; returns the current user plus a recent user list.
 - `POST /api/users` – protected; create another user (requires `email` and `password`).
@@ -64,6 +65,14 @@ Then open [http://localhost:3000](http://localhost:3000).
 - `POST /api/reminders/:medicineId` – protected; create today’s reminder for a medicine (idempotent, defaults to Pending).
 - `PATCH /api/reminders/:id` – protected; update a reminder status (`Pending`/`Taken`).
 - `GET /api/reminders/today` – protected; ensure today’s reminders exist for all medicines and return them.
+
+## Auth & sessions
+
+- **Password policy** (`lib/password-policy.ts`): minimum 12 characters, must contain both letters and numbers, may not be a common/breached password (offline blocklist), and may not contain the email local-part. Passwords are validated exactly as typed — never trimmed or otherwise mutated.
+- **Sessions** are stateless HS256 JWTs in an HTTP-only, `SameSite=Lax` cookie (`Secure` in production), **12-hour lifetime, no sliding refresh**. Re-authentication is required after expiry.
+- **Revocation** is version-based. Each user has a `tokenVersion`; the JWT embeds it as `ver`. Every protected request compares the token's `ver` to the current DB value (`requireSession`/`getServerSession`) and rejects a mismatch with `401`. Middleware stays a cheap signature check (Edge runtime, no DB); revocation is enforced at the Node route layer, which all protected routes pass through.
+- **What invalidates a token:** `POST /api/auth/logout` and `POST /api/auth/change-password` both increment `tokenVersion`, so all tokens issued earlier — on any device — stop authenticating immediately.
+- Deploying this change invalidates all currently active sessions (older tokens carry no `ver`); users log in once more afterward.
 
 ## Tooling
 
