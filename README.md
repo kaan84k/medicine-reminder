@@ -49,7 +49,7 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 ## API foundation
 
-- `GET /api/health` – readiness endpoint that reports environment status.
+- `GET /api/health` – readiness probe. Runs a live `SELECT 1` against Postgres: returns `200` `{status:"ok", database:"up"}` when reachable, `503` `{status:"degraded", database:"down"}` when not. Also reports `environment`, `databaseConfigured`, `authConfigured`. Wire your deploy platform's readiness check to this and treat non-200 as not-ready.
 - `POST /api/auth/signup` – register with `email`/`password`, hashes via bcrypt, and issues an HTTP-only session cookie.
 - `POST /api/auth/login` – sign in with `email`/`password`, issues an HTTP-only session cookie.
 - `POST /api/auth/logout` – clears the session cookie **and** bumps the user's `tokenVersion`, invalidating every previously issued token server-side.

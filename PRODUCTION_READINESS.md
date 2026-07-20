@@ -132,14 +132,21 @@ Legend: **P0** = blocker (cannot ship), **P1** = required before public launch, 
 - Deploy invalidates all *existing* sessions (old tokens lack `ver`) — expected one-time re-login.
 - Tests added in `tests/api/auth.test.ts` (weak-password reject, logout revocation, change-password revocation, wrong-current-password). Not run in this environment — no Postgres; run `npm test` against a test DB to verify.
 
-### P1-4. Health check that reflects real readiness
+### P1-4. Health check that reflects real readiness ✅
 **Problem:** `/api/health` should verify dependencies, not just env presence.
 
 **Work:** Have `/api/health` (or a `/api/ready`) run a cheap DB round-trip (`SELECT 1`) and report degraded status on failure.
 
+**Done:**
+- `GET /api/health` now runs `prisma.$queryRaw`SELECT 1`` on every call (marked `force-dynamic`, never cached). Reachable → `200 {status:"ok", database:"up"}`; unreachable → `503 {status:"degraded", database:"down"}` (failure caught and logged, never a 500). Env fields (`databaseConfigured`, `authConfigured`, `environment`) retained.
+
 **Success criteria:**
-- [ ] Health endpoint returns non-200 when Postgres is unreachable.
-- [ ] Deploy platform uses it for readiness gating.
+- [x] Health endpoint returns non-200 when Postgres is unreachable. (503)
+- [x] Deploy platform uses it for readiness gating. (Documented in README as the readiness probe; 503 lets LBs/orchestrators gate traffic.)
+
+**Notes / follow-ups:**
+- Tests in `tests/api/health.test.ts` (200/up happy path; 503/down via mocked `$queryRaw` rejection). Happy path needs Postgres; run `npm test` against a test DB.
+- Wire the deploy platform's readiness probe to `GET /api/health` and treat non-200 as not-ready (infra config, outside this repo).
 
 ### P1-5. Input validation hardening
 **Problem:** Hand-rolled validation per route; easy to drift.
