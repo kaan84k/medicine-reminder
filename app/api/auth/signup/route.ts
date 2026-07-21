@@ -4,6 +4,7 @@ import { getEnv } from "@/lib/env";
 import { ApiError, json, readJson, withErrorHandling } from "@/lib/http";
 import { hashPassword, issueSessionToken, setSessionCookie } from "@/lib/auth";
 import { assertStrongPassword } from "@/lib/password-policy";
+import { parseEmail } from "@/lib/validation";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -19,13 +20,13 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   await rateLimit(request, "auth:signup", 5, 60_000);
   const body = await readJson<SignupBody>(request);
 
-  const email = body.email?.trim().toLowerCase();
+  const email = parseEmail(body.email);
   // Do NOT trim the password — every character the user typed is part of the
   // secret. Validation reads it as-is and rejects on policy, never mutates it.
   const password = body.password;
 
-  if (!email || !password) {
-    throw new ApiError(400, "email and password are required");
+  if (!password) {
+    throw new ApiError(400, "password is required");
   }
 
   assertStrongPassword(password, email);

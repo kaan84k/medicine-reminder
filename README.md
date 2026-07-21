@@ -74,6 +74,11 @@ Then open [http://localhost:3000](http://localhost:3000).
 - **What invalidates a token:** `POST /api/auth/logout` and `POST /api/auth/change-password` both increment `tokenVersion`, so all tokens issued earlier — on any device — stop authenticating immediately.
 - Deploying this change invalidates all currently active sessions (older tokens carry no `ver`); users log in once more afterward.
 
+## Input validation
+
+- All request bodies and route params are validated centrally in `lib/validation.ts` (`parseMedicineCreate`, `parseMedicineUpdate`, `parseReminderStatus`, `parseUuidParam`, `parseEmail`) — one place for types, length caps, `time` (`HH:MM` 24-hour), UUID param format, email format, and the reminder-status enum.
+- Wrong-type, oversized, malformed, or non-object input returns `400` before any database call; a non-UUID `:id` is rejected up front. Mutating routes never pass unvalidated input to Prisma.
+
 ## Tooling
 
 - Lint: `npm run lint`

@@ -3,51 +3,11 @@ import { NextRequest } from "next/server";
 import { ApiError, json, readJson, withErrorHandling } from "@/lib/http";
 import { getEnv } from "@/lib/env";
 import { requireSession } from "@/lib/auth";
+import { parseMedicineUpdate, parseUuidParam } from "@/lib/validation";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
-
-type MedicineBody = {
-  name?: string;
-  dose?: string | null;
-  time?: string;
-  notes?: string | null;
-};
-
-const normalizePartialBody = (body: MedicineBody) => {
-  const updates: Record<string, string | null> = {};
-
-  if (body.name !== undefined) {
-    const name = body.name.trim();
-    if (!name) {
-      throw new ApiError(400, "name cannot be empty");
-    }
-    updates.name = name;
-  }
-
-  if (body.time !== undefined) {
-    const time = body.time.trim();
-    if (!time) {
-      throw new ApiError(400, "time cannot be empty");
-    }
-    updates.time = time;
-  }
-
-  if (body.dose !== undefined) {
-    updates.dose = body.dose?.trim() || null;
-  }
-
-  if (body.notes !== undefined) {
-    updates.notes = body.notes?.trim() || null;
-  }
-
-  if (Object.keys(updates).length === 0) {
-    throw new ApiError(400, "no fields provided to update");
-  }
-
-  return updates;
-};
 
 const ensureOwnedMedicine = async (id: string, userId: string) => {
   const medicine = await prisma.medicine.findUnique({ where: { id } });
@@ -70,11 +30,7 @@ export const GET = withErrorHandling(async (_request: NextRequest, context) => {
   const session = await requireSession(_request);
   await rateLimit(_request, "medicines:get", 60, 60_000);
   const params = await resolveParams(context);
-  const id = params?.id as string | undefined;
-
-  if (!id) {
-    throw new ApiError(400, "id is required");
-  }
+  const id = parseUuidParam(params?.id, "id");
 
   const medicine = await prisma.medicine.findFirst({
     where: { id, userId: session.sub },
@@ -92,14 +48,10 @@ export const PUT = withErrorHandling(async (request: NextRequest, context) => {
   const session = await requireSession(request);
   await rateLimit(request, "medicines:update", 30, 60_000);
   const params = await resolveParams(context);
-  const id = params?.id as string | undefined;
+  const id = parseUuidParam(params?.id, "id");
 
-  if (!id) {
-    throw new ApiError(400, "id is required");
-  }
-
-  const body = await readJson<MedicineBody>(request);
-  const updates = normalizePartialBody(body);
+  const body = await readJson<unknown>(request);
+  const updates = parseMedicineUpdate(body);
 
   await ensureOwnedMedicine(id, session.sub);
 
@@ -116,11 +68,7 @@ export const DELETE = withErrorHandling(async (request: NextRequest, context) =>
   const session = await requireSession(request);
   await rateLimit(request, "medicines:delete", 20, 60_000);
   const params = await resolveParams(context);
-  const id = params?.id as string | undefined;
-
-  if (!id) {
-    throw new ApiError(400, "id is required");
-  }
+  const id = parseUuidParam(params?.id, "id");
 
   await ensureOwnedMedicine(id, session.sub);
   await prisma.medicine.delete({ where: { id } });

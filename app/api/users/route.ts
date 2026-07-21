@@ -4,6 +4,7 @@ import { ApiError, json, readJson, withErrorHandling } from "@/lib/http";
 import { getEnv } from "@/lib/env";
 import { hashPassword, requireSession } from "@/lib/auth";
 import { assertStrongPassword } from "@/lib/password-policy";
+import { parseEmail } from "@/lib/validation";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -46,11 +47,11 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
   const body = await readJson<CreateUserPayload>(request);
 
-  const email = body.email?.trim().toLowerCase();
+  const email = parseEmail(body.email);
   const password = body.password;
 
-  if (!email || !password) {
-    throw new ApiError(400, "email and password are required");
+  if (!password) {
+    throw new ApiError(400, "password is required");
   }
 
   assertStrongPassword(password, email);
