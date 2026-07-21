@@ -49,7 +49,7 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 ## API foundation
 
-- `GET /api/health` – readiness endpoint that reports environment status.
+- `GET /api/health` – readiness probe. Runs a live `SELECT 1` against Postgres: returns `200` `{status:"ok", database:"up"}` when reachable, `503` `{status:"degraded", database:"down"}` when not. Also reports `environment`, `databaseConfigured`, `authConfigured`. Wire your deploy platform's readiness check to this and treat non-200 as not-ready.
 - `POST /api/auth/signup` – register with `email`/`password`, hashes via bcrypt, and issues an HTTP-only session cookie.
 - `POST /api/auth/login` – sign in with `email`/`password`, issues an HTTP-only session cookie.
 - `POST /api/auth/logout` – clears the session cookie **and** bumps the user's `tokenVersion`, invalidating every previously issued token server-side.
@@ -73,6 +73,11 @@ Then open [http://localhost:3000](http://localhost:3000).
 - **Revocation** is version-based. Each user has a `tokenVersion`; the JWT embeds it as `ver`. Every protected request compares the token's `ver` to the current DB value (`requireSession`/`getServerSession`) and rejects a mismatch with `401`. Middleware stays a cheap signature check (Edge runtime, no DB); revocation is enforced at the Node route layer, which all protected routes pass through.
 - **What invalidates a token:** `POST /api/auth/logout` and `POST /api/auth/change-password` both increment `tokenVersion`, so all tokens issued earlier — on any device — stop authenticating immediately.
 - Deploying this change invalidates all currently active sessions (older tokens carry no `ver`); users log in once more afterward.
+
+## Input validation
+
+- All request bodies and route params are validated centrally in `lib/validation.ts` (`parseMedicineCreate`, `parseMedicineUpdate`, `parseReminderStatus`, `parseUuidParam`, `parseEmail`) — one place for types, length caps, `time` (`HH:MM` 24-hour), UUID param format, email format, and the reminder-status enum.
+- Wrong-type, oversized, malformed, or non-object input returns `400` before any database call; a non-UUID `:id` is rejected up front. Mutating routes never pass unvalidated input to Prisma.
 
 ## Tooling
 

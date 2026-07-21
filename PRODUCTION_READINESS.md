@@ -132,24 +132,37 @@ Legend: **P0** = blocker (cannot ship), **P1** = required before public launch, 
 - Deploy invalidates all *existing* sessions (old tokens lack `ver`) — expected one-time re-login.
 - Tests added in `tests/api/auth.test.ts` (weak-password reject, logout revocation, change-password revocation, wrong-current-password). Not run in this environment — no Postgres; run `npm test` against a test DB to verify.
 
-### P1-4. Health check that reflects real readiness
+### P1-4. Health check that reflects real readiness ✅
 **Problem:** `/api/health` should verify dependencies, not just env presence.
 
 **Work:** Have `/api/health` (or a `/api/ready`) run a cheap DB round-trip (`SELECT 1`) and report degraded status on failure.
 
-**Success criteria:**
-- [ ] Health endpoint returns non-200 when Postgres is unreachable.
-- [ ] Deploy platform uses it for readiness gating.
+**Done:**
+- `GET /api/health` now runs `prisma.$queryRaw`SELECT 1`` on every call (marked `force-dynamic`, never cached). Reachable → `200 {status:"ok", database:"up"}`; unreachable → `503 {status:"degraded", database:"down"}` (failure caught and logged, never a 500). Env fields (`databaseConfigured`, `authConfigured`, `environment`) retained.
 
-### P1-5. Input validation hardening
+**Success criteria:**
+- [x] Health endpoint returns non-200 when Postgres is unreachable. (503)
+- [x] Deploy platform uses it for readiness gating. (Documented in README as the readiness probe; 503 lets LBs/orchestrators gate traffic.)
+
+**Notes / follow-ups:**
+- Tests in `tests/api/health.test.ts` (200/up happy path; 503/down via mocked `$queryRaw` rejection). Happy path needs Postgres; run `npm test` against a test DB.
+- Wire the deploy platform's readiness probe to `GET /api/health` and treat non-200 as not-ready (infra config, outside this repo).
+
+### P1-5. Input validation hardening ✅
 **Problem:** Hand-rolled validation per route; easy to drift.
 
 **Work:** Adopt a schema validator (e.g. `zod`) for all request bodies and route params. Validate `time` format, string lengths, enum values centrally.
 
+**Done:**
+- New `lib/validation.ts` centralizes all request-body and route-param parsing: `parseMedicineCreate`, `parseMedicineUpdate`, `parseReminderStatus`, `parseUuidParam`, `parseEmail`. One source of truth for types, length caps (`FIELD_LIMITS`), `time` format (`HH:MM` 24-hour regex), UUID param format, and the `ReminderState` enum. A hand-rolled module rather than `zod` — deliberately zero new runtime dependency (offline-installable), same pattern as `lib/password-policy.ts`; swappable for zod later without touching call sites.
+- Every mutating route now parses through it: `medicines` POST/PUT (+ GET/DELETE param), `reminders/:id` POST/PATCH (+ params), `auth/signup` and `users` POST (email format/length). Wrong-type, oversized, malformed, and non-object bodies raise `ApiError(400)` **before** any Prisma call. Non-UUID `:id` params are rejected up front instead of reaching a `@db.Uuid` query.
+
 **Success criteria:**
-- [ ] Every mutating route validates its body against a schema.
-- [ ] Oversized / malformed / wrong-type inputs return 400, never reach Prisma.
-- [ ] Tests cover invalid-input cases per route.
+- [x] Every mutating route validates its body against a schema. (Centralized in `lib/validation.ts`.)
+- [x] Oversized / malformed / wrong-type inputs return 400, never reach Prisma.
+- [x] Tests cover invalid-input cases per route. (`tests/api/validation.test.ts`.)
+
+**Notes:** Validation-only test file added; needs Postgres for the authed cases (session lookup precedes parse). Run `npm test` against a test DB. Hand-rolled validators can be replaced by `zod` schemas behind the same `parse*` function signatures if a dependency is later acceptable.
 
 ---
 

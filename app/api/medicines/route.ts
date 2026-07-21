@@ -1,48 +1,20 @@
 import { NextRequest } from "next/server";
 
-import { ApiError, json, readJson, withErrorHandling } from "@/lib/http";
+import { json, readJson, withErrorHandling } from "@/lib/http";
 import { getEnv } from "@/lib/env";
 import { requireSession } from "@/lib/auth";
+import { parseMedicineCreate } from "@/lib/validation";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
-type MedicineBody = {
-  name?: string;
-  dose?: string | null;
-  time?: string;
-  notes?: string | null;
-};
-
-const normalizeBody = (body: MedicineBody) => {
-  const name = body.name?.trim();
-  const time = body.time?.trim();
-  const dose = body.dose?.trim();
-  const notes = body.notes?.trim();
-
-  if (!name) {
-    throw new ApiError(400, "name is required");
-  }
-
-  if (!time) {
-    throw new ApiError(400, "time is required");
-  }
-
-  return {
-    name,
-    time,
-    dose: dose || null,
-    notes: notes || null,
-  };
-};
-
 export const POST = withErrorHandling(async (request: NextRequest) => {
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(request);
   await rateLimit(request, "medicines:create", 30, 60_000);
-  const body = await readJson<MedicineBody>(request);
-  const parsed = normalizeBody(body);
+  const body = await readJson<unknown>(request);
+  const parsed = parseMedicineCreate(body);
 
   const medicine = await prisma.medicine.create({
     data: {

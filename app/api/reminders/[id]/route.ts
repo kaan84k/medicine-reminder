@@ -4,19 +4,13 @@ import { NextRequest } from "next/server";
 import { ApiError, json, readJson, withErrorHandling } from "@/lib/http";
 import { getEnv } from "@/lib/env";
 import { requireSession } from "@/lib/auth";
+import { parseReminderStatus, parseUuidParam } from "@/lib/validation";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
 type StatusBody = {
   status?: ReminderState;
-};
-
-const assertStatus = (status: unknown): ReminderState => {
-  if (status === ReminderState.Pending || status === ReminderState.Taken) {
-    return status;
-  }
-  throw new ApiError(400, "status must be Pending or Taken");
 };
 
 const resolveParams = async (context: unknown) => {
@@ -31,14 +25,10 @@ export const POST = withErrorHandling(async (request: NextRequest, context) => {
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(request);
   const params = await resolveParams(context);
-  const medicineId = params?.id as string | undefined;
-
-  if (!medicineId) {
-    throw new ApiError(400, "medicineId is required");
-  }
+  const medicineId = parseUuidParam(params?.id, "medicineId");
 
   const body = await readJson<StatusBody>(request);
-  const status = body.status ? assertStatus(body.status) : ReminderState.Pending;
+  const status = body.status ? parseReminderStatus(body.status) : ReminderState.Pending;
 
   const todayStartUtc = () => {
     const now = new Date();
@@ -85,17 +75,13 @@ export const PATCH = withErrorHandling(async (request: NextRequest, context) => 
   await getEnv({ requireAuthSecret: true });
   const session = await requireSession(request);
   const params = await resolveParams(context);
-  const reminderId = params?.id as string | undefined;
-
-  if (!reminderId) {
-    throw new ApiError(400, "id is required");
-  }
+  const reminderId = parseUuidParam(params?.id, "id");
 
   const body = await readJson<StatusBody>(request);
   if (!body.status) {
     throw new ApiError(400, "status is required");
   }
-  const status = assertStatus(body.status);
+  const status = parseReminderStatus(body.status);
 
   const reminder = await prisma.reminderStatus.findFirst({
     where: {
